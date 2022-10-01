@@ -1,0 +1,10 @@
+# ignore all files
+*
+# not ignore nested files
+!**/
+# not ignore files with extension
+!**/*.*
+
+**/*.pdb
+**/*.exe
+**/*.mp3
