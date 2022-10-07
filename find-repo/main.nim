@@ -24,7 +24,7 @@ proc processDir(dir: string) =
     of pcDir:
       processDir(item)
     else:
-      return
+      discard
 
 var dirs: seq[string] = commandLineParams()
 
