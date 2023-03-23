@@ -1,8 +1,8 @@
 # reference: https://id3.org/id3v2.3.0
 
-import sequtils
+import lx
+
 import strutils
-import sugar
 import math
 import parseopt
 
@@ -31,7 +31,7 @@ proc handleFile(filename: string) =
   assert 10 == file.readBytes(buf, 0, 10)
 
   # ID3v2/file identifier
-  if buf[0..2].map(x => x.chr).join("") != "ID3":
+  if buf[0..2] != "ID3":
     abort("is not id3: " & filename)
 
   # id (read above): 3; ver: 2; flag: 1; size: 4 byte(s)
@@ -57,14 +57,15 @@ proc handleFile(filename: string) =
     while file.getFilePos.uint64 < tagSize + 10:
       assert 10 == file.readBytes(buf, 0, 10)
       # frameId must consist of uppercase (and optional 0-9)
-      for ch in buf[0..3].map(x => x.chr):
+      for ch in buf[0..3]:
+        let ch = ch.char
         if not (
           (ch >= 'A' and ch <= 'Z') or (ch >= '0' and ch <= '9')
           ):
           #let pos = file.getFilePos - 4
-          #abort("invalid header at pos " & $pos & ": " & buf[0..3].map(x => x.toHex).join(" "))
+          #abort("invalid header at pos " & $pos & ": " & buf[0..3])
           break iterOnFrame
-      let frameId = buf[0..3].map(x => x.chr).join("")
+      let frameId = buf[0..3]
       let frameSize = buf[4] * (256'u64 ^ 3) + buf[5] * (256'u64 ^ 2) + buf[6] * (256'u64) + buf[7]
       #echo frameId & " " & $frameSize
 
