@@ -10,7 +10,11 @@ fn printHelp() void {
 }
 
 pub fn main() !void {
-    var args = std.process.args();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var args = try std.process.argsWithAllocator(allocator);
     _ = args.skip();
     var noArg = true;
     var failedCount: usize = 0;
