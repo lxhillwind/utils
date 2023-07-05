@@ -4,7 +4,7 @@ import os
 proc processDir(dir: string) =
   if dirExists(dir & "/.git"):
     echo dir
-    if not dirExists(dir & "/.git/modules"):
+    if not fileExists(dir & "/.gitmodules"):
       # do not go deeper for git without submodule
       return
   if fileExists(dir & "/.git"):
