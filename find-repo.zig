@@ -68,10 +68,11 @@ fn processDir(path: std.ArrayList(u8)) !void {
     }
 
     // walkdir
-    var new_dir = std.fs.cwd().openIterableDir(path.items, .{}) catch |e| {
+    var new_dir = cwd.openIterableDir(path.items, .{}) catch |e| {
         std.debug.print("error: {any}\n", .{e});
         return;
     };
+    defer new_dir.close();
     var iterator = new_dir.iterate();
     while (try iterator.next()) |item| {
         if (item.kind == .directory) {
@@ -82,6 +83,8 @@ fn processDir(path: std.ArrayList(u8)) !void {
         }
     }
 }
+
+const cwd = std.fs.cwd();
 
 fn StatCheck(path: []const u8, expect: u32) bool {
     var statbuf: std.os.Stat = undefined;
