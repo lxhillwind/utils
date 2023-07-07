@@ -87,7 +87,7 @@ fn handleFile(path: []const u8) !void {
                 }
                 break :iterOnFrame;
             }
-            try fp.seekBy(@intCast(i64, frameSize));
+            try fp.seekBy(@intCast(frameSize));
         }
     };
 }
