@@ -1,19 +1,18 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const windows = std.os.windows;
 
 const stat = blk: {
-    if (builtin.os.tag == .windows) {
-        @compileError("unsupported OS");
+    if (builtin.os.tag == .linux and builtin.cpu.arch == .x86_64) {
+        break :blk std.os.linux.stat;
     } else {
-        if (builtin.os.tag == .linux and builtin.cpu.arch == .x86_64) {
-            break :blk std.os.linux.stat;
-        } else {
-            break :blk struct {
-                extern "c" fn stat([*:0]const u8, *std.os.Stat) usize;
-            }.stat;
-        }
+        break :blk struct {
+            extern "c" fn stat([*:0]const u8, *std.os.Stat) usize;
+        }.stat;
     }
 };
+
+pub extern "kernel32" fn GetFileAttributesA(lpFileName: [*:0]const u8) callconv(windows.WINAPI) windows.DWORD;
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -68,7 +67,7 @@ fn processDir(path: std.ArrayList(u8)) !void {
     }
 
     // walkdir
-    var new_dir = cwd.openIterableDir(path.items, .{}) catch |e| {
+    var new_dir = std.fs.cwd().openIterableDir(path.items, .{}) catch |e| {
         std.debug.print("error: {any}\n", .{e});
         return;
     };
@@ -84,8 +83,6 @@ fn processDir(path: std.ArrayList(u8)) !void {
     }
 }
 
-const cwd = std.fs.cwd();
-
 fn StatCheck(path: []const u8, expect: u32) bool {
     var statbuf: std.os.Stat = undefined;
     var res = stat(@ptrCast(path), &statbuf);
@@ -97,15 +94,27 @@ fn StatCheck(path: []const u8, expect: u32) bool {
 }
 
 fn dirExists(path: []const u8) bool {
-    return StatCheck(path, std.os.S.IFDIR);
+    if (builtin.os.tag == .windows) {
+        const rc = GetFileAttributesA(@ptrCast(path));
+        if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
+        return rc & windows.FILE_ATTRIBUTE_DIRECTORY != 0;
+    } else {
+        return StatCheck(path, std.os.S.IFDIR);
+    }
 }
 
 fn fileExists(path: []const u8) bool {
-    return StatCheck(path, std.os.S.IFREG);
+    if (builtin.os.tag == .windows) {
+        const rc = GetFileAttributesA(@ptrCast(path));
+        if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
+        return rc & windows.FILE_ATTRIBUTE_DIRECTORY == 0;
+    } else {
+        return StatCheck(path, std.os.S.IFREG);
+    }
 }
 
-const stdout = std.io.getStdOut().writer();
 fn print(s: []const u8) void {
+    const stdout = std.io.getStdOut().writer();
     _ = stdout.write(s) catch return;
     _ = stdout.write("\n") catch return;
 }
