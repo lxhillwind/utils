@@ -56,7 +56,8 @@ fn processDir(path: std.ArrayList(u8)) !void {
 
     // blacklist
     {
-        var bl_iter = std.mem.splitBackwards(u8, path.items, "\\/");
+        const sep = if (builtin.os.tag == .windows) "\\/" else "/";
+        var bl_iter = std.mem.splitBackwardsAny(u8, path.items, sep);
         if (bl_iter.next()) |stem| {
             for (blacklist) |s| {
                 if (std.mem.eql(u8, s, stem)) {
