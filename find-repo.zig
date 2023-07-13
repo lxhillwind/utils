@@ -54,6 +54,19 @@ fn processDir(path: std.ArrayList(u8)) !void {
         return;
     }
 
+    // blacklist
+    {
+        const sep = if (builtin.os.tag == .windows) "\\/" else "/";
+        var bl_iter = std.mem.splitBackwardsAny(u8, path.items, sep);
+        if (bl_iter.next()) |stem| {
+            for (blacklist) |s| {
+                if (std.mem.eql(u8, s, stem)) {
+                    return;
+                }
+            }
+        }
+    }
+
     // walkdir
     var new_dir = std.fs.cwd().openIterableDir(path.items, .{}) catch |e| {
         std.debug.print("error: {any}\n", .{e});
@@ -61,13 +74,8 @@ fn processDir(path: std.ArrayList(u8)) !void {
     };
     defer new_dir.close();
     var iterator = new_dir.iterate();
-    blk: while (try iterator.next()) |item| {
+    while (try iterator.next()) |item| {
         if (item.kind == .directory) {
-            for (blacklist) |s| {
-                if (std.mem.eql(u8, s, item.name)) {
-                    continue :blk;
-                }
-            }
             var path_new = try path.clone();
             try path_new.append('/');
             try path_new.appendSlice(item.name);
