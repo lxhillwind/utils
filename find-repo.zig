@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const windows = std.os.windows;
 
 const stat = blk: {
-    if (builtin.os.tag == .linux and builtin.cpu.arch == .x86_64) {
+    if (builtin.os.tag == .linux and @hasField(std.os.linux.SYS, "stat")) {
         break :blk std.os.linux.stat;
     } else {
         break :blk struct {
