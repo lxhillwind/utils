@@ -23,9 +23,10 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var env_f = std.process.getEnvVarOwned(allocator, "F") catch "";
-    var env_fs = std.process.getEnvVarOwned(allocator, "FS") catch "";
-    var env_fx = std.process.getEnvVarOwned(allocator, "FX") catch "";
+    const is_win32 = @import("builtin").os.tag == .windows;
+    var env_f = std.process.getEnvVarOwned(allocator, if (is_win32) "F" else "f") catch "";
+    var env_fs = std.process.getEnvVarOwned(allocator, if (is_win32) "FS" else "fs") catch "";
+    var env_fx = std.process.getEnvVarOwned(allocator, if (is_win32) "FX" else "fx") catch "";
     // PWD is not required, since busybox will set it.
 
     if (isDoubleQuoted(env_f)) {
@@ -41,12 +42,24 @@ pub fn main() !void {
     }
 
     var env_map = try std.process.getEnvMap(allocator);
-    try env_map.put("f", env_f);
-    try env_map.put("fs", env_fs);
-    try env_map.put("fx", env_fx);
+    // case does not care if in windows; but to work in unix, use uppercase.
+    try env_map.put("F", env_f);
+    try env_map.put("FS", env_fs);
+    try env_map.put("FX", env_fx);
 
     var argsNew = std.ArrayList([]const u8).init(allocator);
-    try argsNew.appendSlice(&[_][]const u8{ "busybox", "sh" });
+    try argsNew.appendSlice(&[_][]const u8{
+        // TODO there will be 4 busybox process in windows in default case;
+        // don't know how to solve it yet.
+        "busybox", "sh", "-c",
+        \\export f=$F;
+        \\export fs=$FS;
+        \\export fx=$FX;
+        \\"$@";
+        , // in windows, env is in uppercase; convert them to lowercase inside busybox.
+        "-", // $0
+        "sh",
+    });
 
     var args = try std.process.argsWithAllocator(allocator);
     _ = args.skip();
