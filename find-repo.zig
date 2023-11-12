@@ -77,7 +77,9 @@ fn processDir(path: std.ArrayList(u8)) !void {
     while (try iterator.next()) |item| {
         if (item.kind == .directory) {
             var path_new = try path.clone();
-            try path_new.append('/');
+            if (path_new.getLast() != '/') {
+                try path_new.append('/');
+            }
             try path_new.appendSlice(item.name);
             processDir(path_new) catch |e| std.debug.print("error: {any}\n", .{e});
         }
