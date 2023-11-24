@@ -43,15 +43,11 @@ fn processDir(path: std.ArrayList(u8)) !void {
     try with_gitmodules.appendSlice("/.gitmodules");
     try with_gitmodules.append(0);
 
-    if (dirExists(with_git.items)) {
+    if (dirExists(with_git.items) or fileExists(with_git.items)) {
         print(path.items);
         if (!fileExists(with_gitmodules.items)) {
             return;
         }
-    }
-    if (fileExists(with_git.items)) {
-        print(path.items);
-        return;
     }
 
     // blacklist
