@@ -54,6 +54,6 @@ pub fn main() !void {
         try argsNew.append(arg);
     }
     var process = std.ChildProcess.init(argsNew.items, allocator);
-    var p = try process.spawnAndWait();
+    const p = try process.spawnAndWait();
     std.process.exit(p.Exited);
 }

@@ -7,7 +7,7 @@ const stat = blk: {
         break :blk std.os.linux.stat;
     } else {
         break :blk struct {
-            extern "c" fn stat([*:0]const u8, *std.os.Stat) usize;
+            extern "c" fn stat([*:0]const u8, *std.posix.Stat) usize;
         }.stat;
     }
 };
@@ -64,7 +64,7 @@ fn processDir(path: std.ArrayList(u8)) !void {
     }
 
     // walkdir
-    var new_dir = std.fs.cwd().openIterableDir(path.items, .{}) catch |e| {
+    var new_dir = std.fs.cwd().openDir(path.items, .{ .iterate = true }) catch |e| {
         std.debug.print("error: {any}\n", .{e});
         return;
     };
@@ -83,12 +83,12 @@ fn processDir(path: std.ArrayList(u8)) !void {
 }
 
 fn StatCheck(path: []const u8, expect: u32) bool {
-    var statbuf: std.os.Stat = undefined;
-    var res = stat(@ptrCast(path), &statbuf);
+    var statbuf: std.posix.Stat = undefined;
+    const res = stat(@ptrCast(path), &statbuf);
     if (res != 0) {
         return false;
     }
-    const m = statbuf.mode & std.os.S.IFMT;
+    const m = statbuf.mode & std.posix.S.IFMT;
     return m == expect;
 }
 
@@ -98,7 +98,7 @@ fn dirExists(path: []const u8) bool {
         if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
         return rc & windows.FILE_ATTRIBUTE_DIRECTORY != 0;
     } else {
-        return StatCheck(path, std.os.S.IFDIR);
+        return StatCheck(path, std.posix.S.IFDIR);
     }
 }
 
@@ -108,7 +108,7 @@ fn fileExists(path: []const u8) bool {
         if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
         return rc & windows.FILE_ATTRIBUTE_DIRECTORY == 0;
     } else {
-        return StatCheck(path, std.os.S.IFREG);
+        return StatCheck(path, std.posix.S.IFREG);
     }
 }
 

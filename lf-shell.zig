@@ -68,6 +68,6 @@ pub fn main() !void {
     }
     var process = std.ChildProcess.init(argsNew.items, allocator);
     process.env_map = &env_map;
-    var p = try process.spawnAndWait();
+    const p = try process.spawnAndWait();
     std.process.exit(p.Exited);
 }
