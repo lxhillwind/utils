@@ -64,7 +64,9 @@ index_template = """
 
 def get_images_in_directory(directory):
     images = []
-    for filename in os.listdir(directory):
+    items = os.listdir(directory)
+    items.sort()
+    for filename in items:
         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
             images.append((directory, '/'.join([directory, filename])))
     return images
@@ -72,7 +74,9 @@ def get_images_in_directory(directory):
 
 def get_images_in_subdirectories(directory):
     images = []
-    for subdirectory in os.listdir(directory):
+    items = os.listdir(directory)
+    items.sort()
+    for subdirectory in items:
         subdirectory_path = os.path.join(directory, subdirectory)
         if os.path.isdir(subdirectory_path):
             images_in_subdirectory = get_images_in_directory(subdirectory_path)
