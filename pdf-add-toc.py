@@ -56,8 +56,8 @@ with open(args.c) as f:
         else:
             toc.append(parse_toc(line))
 
-reader = pypdf.PdfReader(args.i)
-writer = pypdf.PdfWriter(clone_from=reader)
+writer = pypdf.PdfWriter()
+writer.append(fileobj=args.i, import_outline=False)
 
 toc_level_stack = {0: None}
 for i in toc:
