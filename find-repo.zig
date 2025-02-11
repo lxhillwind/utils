@@ -43,9 +43,9 @@ fn processDir(path: std.ArrayList(u8)) !void {
     try with_gitmodules.appendSlice("/.gitmodules");
     try with_gitmodules.append(0);
 
-    if (dirExists(with_git.items) or fileExists(with_git.items)) {
+    if (dirExists(assertCstring(with_git.items)) or fileExists(assertCstring(with_git.items))) {
         print(path.items);
-        if (!fileExists(with_gitmodules.items)) {
+        if (!fileExists(assertCstring(with_gitmodules.items))) {
             return;
         }
     }
@@ -82,9 +82,9 @@ fn processDir(path: std.ArrayList(u8)) !void {
     }
 }
 
-fn StatCheck(path: []const u8, expect: u32) bool {
+fn StatCheck(path: [*:0]const u8, expect: u32) bool {
     var statbuf: std.posix.Stat = undefined;
-    const res = stat(@ptrCast(path), &statbuf);
+    const res = stat(path, &statbuf);
     if (res != 0) {
         return false;
     }
@@ -92,9 +92,9 @@ fn StatCheck(path: []const u8, expect: u32) bool {
     return m == expect;
 }
 
-fn dirExists(path: []const u8) bool {
+fn dirExists(path: [*:0]const u8) bool {
     if (builtin.os.tag == .windows) {
-        const rc = GetFileAttributesA(@ptrCast(path));
+        const rc = GetFileAttributesA(path);
         if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
         return rc & windows.FILE_ATTRIBUTE_DIRECTORY != 0;
     } else {
@@ -102,9 +102,9 @@ fn dirExists(path: []const u8) bool {
     }
 }
 
-fn fileExists(path: []const u8) bool {
+fn fileExists(path: [*:0]const u8) bool {
     if (builtin.os.tag == .windows) {
-        const rc = GetFileAttributesA(@ptrCast(path));
+        const rc = GetFileAttributesA(path);
         if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
         return rc & windows.FILE_ATTRIBUTE_DIRECTORY == 0;
     } else {
@@ -121,3 +121,8 @@ fn print(s: []const u8) void {
 const blacklist = [_][]const u8{
     "venv", "node_modules",
 };
+
+fn assertCstring(s: []const u8) [*:0]const u8 {
+    if (s[s.len - 1] != 0) unreachable;
+    return @ptrCast(s);
+}

@@ -53,7 +53,7 @@ pub fn main() !void {
     while (argsIt.next()) |arg| {
         try argsNew.append(arg);
     }
-    var process = std.ChildProcess.init(argsNew.items, allocator);
+    var process = std.process.Child.init(argsNew.items, allocator);
     const p = try process.spawnAndWait();
     std.process.exit(p.Exited);
 }
