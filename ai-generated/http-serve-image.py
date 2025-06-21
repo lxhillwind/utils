@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import re
 from flask import Flask, render_template_string, send_from_directory
 
 current_path = os.getcwd()
@@ -62,10 +63,16 @@ index_template = """
 </html>
 """
 
+
+def sort_num(s):
+    m = re.match(r'(\d+)', s)
+    return int(m.groups()[0]) if m else -1
+
+
 def get_images_in_directory(directory):
     images = []
     items = os.listdir(directory)
-    items.sort()
+    items.sort(key=sort_num)
     for filename in items:
         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
             images.append((directory, '/'.join([directory, filename])))
@@ -107,4 +114,4 @@ def image(filename):
 
 
 if __name__ == '__main__':
-    app.run(port=8001)
+    app.run(host='::0', port=8000, debug=os.getenv('DEBUG') == '1')
