@@ -1,20 +1,22 @@
 const std = @import("std");
 
 fn printHelp() void {
-    std.io.getStdErr().writeAll(
+    std.debug.print("{s}\n", .{
         \\  update id3 tag in .mp3 files:
         \\    convert disc type cover to front cover.
         \\
         \\  usage: {exe} [files to handle...]
-        ++ "\n") catch return;
+    });
 }
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+var io: std.Io = undefined;
+var gpa: std.mem.Allocator = undefined;
 
-    var args = try std.process.argsWithAllocator(allocator);
+pub fn main(init: std.process.Init) !void {
+    gpa = init.gpa;
+    io = init.io;
+
+    var args = init.minimal.args.iterate();
     _ = args.skip();
     var noArg = true;
     var failedCount: usize = 0;
@@ -36,12 +38,17 @@ pub fn main() !void {
 }
 
 fn handleFile(path: []const u8) !void {
-    const fp = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-    var buf = [_]u8{0} ** 100;
-    var reader = fp.reader();
+    const fp = try std.Io.Dir.cwd().openFile(io, path, .{ .mode = .read_write });
+    var buf_f: [100]u8 = undefined;
+    var buf: [100]u8 = undefined;
+    var f_reader = fp.reader(io, &buf_f);
+    const reader = &f_reader.interface;
 
-    try assert(10 == try reader.read(buf[0..10]), "reading tag header");
-    try assert(std.mem.eql(u8, "ID3", buf[0..3]), "is not id3");
+    // reading tag header
+    try reader.readSliceAll(buf[0..10]);
+    if (!std.mem.eql(u8, "ID3", buf[0..3])) {
+        return error.FileTagIsNotID3;
+    }
 
     // id (read above): 3; ver: 2; flag: 1; size: 4 byte(s)
     // so size begin from buf[6];
@@ -49,17 +56,18 @@ fn handleFile(path: []const u8) !void {
     const tagSize = @as(usize, buf[6]) * (2 << 21) + @as(usize, buf[7]) * (2 << 14)  + @as(usize, buf[8]) * (2 << 7) + @as(usize, buf[9]);
 
     // skip extended header
-    try assert(4 == try reader.read(buf[0..4]), "reading extended header size");
+    try reader.readSliceAll(buf[0..4]);
     const extendedHeaderSize: u8 = switch(buf[3]) {
         6 => 6,
         10 => 10,
         else => 0,
     };
-    try fp.seekTo(10 + extendedHeaderSize);
+    try f_reader.seekTo(10 + extendedHeaderSize);
 
     _ = iterOnFrame: {
-        while(try fp.getPos() < tagSize + 10) {
-            try assert(10 == try reader.read(buf[0..10]), "reading a tag");
+        while(f_reader.logicalPos() < tagSize + 10) {
+            // reading a tag
+            try reader.readSliceAll(buf[0..10]);
             // frameId must consist of uppercase (and optional 0-9)
             for (buf[0..4]) |ch| {
                 if (!
@@ -76,25 +84,26 @@ fn handleFile(path: []const u8) !void {
             const frameSize = @as(usize, buf[4]) * (2 << 21) + @as(usize, buf[5]) * (2 << 14) + @as(usize, buf[6]) * (2 << 7) + @as(usize, buf[7]);
 
             if (std.mem.eql(u8, frameId, "APIC")) {
-                try fp.seekBy(1); // skip Text encoding
-                try reader.skipUntilDelimiterOrEof('\x00'); // skip MIME type
-                const picType = try reader.readByte();
+                try f_reader.seekBy(1); // skip Text encoding
+                _ = try reader.discardDelimiterInclusive('\x00'); // skip MIME type
+                const picType = r: {
+                    try reader.readSliceAll(buf[0..1]);
+                    break :r buf[0];
+                };
+                std.debug.print("picType: {}\n", .{picType});
                 if (picType == 6) {
                     std.debug.print("filename: {s} picType: {d}\n", .{path, picType});
-                    try fp.seekBy(-1);
-                    try fp.writer().writeByte('\x03');
+                    try f_reader.seekBy(-1);
+                    var f_writer = fp.writer(io, &buf_f);
+                    try f_writer.seekTo(f_reader.logicalPos());
+                    const w = &f_writer.interface;
+                    try w.writeByte('\x03');
+                    try w.flush();
                     std.debug.print("  updated.\n", .{});
                 }
                 break :iterOnFrame;
             }
-            try fp.seekBy(@intCast(frameSize));
+            try f_reader.seekBy(@intCast(frameSize));
         }
     };
-}
-
-fn assert(cond: bool, msg: []const u8) !void {
-    if (!cond) {
-        std.debug.print("{s}: failed.\n", .{msg});
-        return error.AssertError;
-    }
 }

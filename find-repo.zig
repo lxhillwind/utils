@@ -2,53 +2,25 @@ const std = @import("std");
 const builtin = @import("builtin");
 const windows = std.os.windows;
 
-const stat = blk: {
-    if (builtin.os.tag == .linux and @hasField(std.os.linux.SYS, "stat")) {
-        break :blk std.os.linux.stat;
-    } else {
-        break :blk struct {
-            extern "c" fn stat([*:0]const u8, *std.posix.Stat) usize;
-        }.stat;
-    }
-};
+var io: std.Io = undefined;
+var gpa: std.mem.Allocator = undefined;
 
-pub extern "kernel32" fn GetFileAttributesA(lpFileName: [*:0]const u8) callconv(windows.WINAPI) windows.DWORD;
+pub fn main(init: std.process.Init) !void {
+    gpa = init.gpa;
+    io = init.io;
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = init.minimal.args.iterate();
     _ = args.skip();
 
-    var path_buf = std.ArrayList(u8).init(allocator);
     while (args.next()) |path| {
-        path_buf.clearRetainingCapacity();
-        try path_buf.appendSlice(path);
-        processDir(try path_buf.clone()) catch |e| std.debug.print("error: {any}\n", .{e});
+        var path_buf: std.ArrayList(u8) = .empty;
+        try path_buf.appendSlice(gpa, path);
+        processDir(&path_buf) catch |e| std.debug.print("error: {any}\n", .{e});
     }
 }
 
-fn processDir(path: std.ArrayList(u8)) !void {
-    defer path.deinit();
-
-    var with_git = try path.clone();
-    defer with_git.deinit();
-    try with_git.appendSlice("/.git");
-    try with_git.append(0);
-
-    var with_gitmodules = try path.clone();
-    defer with_gitmodules.deinit();
-    try with_gitmodules.appendSlice("/.gitmodules");
-    try with_gitmodules.append(0);
-
-    if (dirExists(assertCstring(with_git.items)) or fileExists(assertCstring(with_git.items))) {
-        print(path.items);
-        if (!fileExists(assertCstring(with_gitmodules.items))) {
-            return;
-        }
-    }
+fn processDir(path: *std.ArrayList(u8)) !void {
+    defer path.deinit(gpa);
 
     // blacklist
     {
@@ -64,65 +36,59 @@ fn processDir(path: std.ArrayList(u8)) !void {
     }
 
     // walkdir
-    var new_dir = std.fs.cwd().openDir(path.items, .{ .iterate = true }) catch |e| {
+    var new_dir = std.Io.Dir.cwd().openDir(io, path.items, .{ .iterate = true }) catch |e| {
         std.debug.print("error: {any}\n", .{e});
         return;
     };
-    defer new_dir.close();
+    defer new_dir.close(io);
     var iterator = new_dir.iterate();
-    while (try iterator.next()) |item| {
-        if (item.kind == .directory) {
-            var path_new = try path.clone();
+
+    var entries: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (entries.items) |i| {
+            gpa.free(i);
+        }
+        entries.deinit(gpa);
+    }
+    var has_git = false;
+    var has_git_submodule = false;
+    while (try iterator.next(io)) |item| {
+        if (std.mem.eql(u8, ".git", item.name)) {
+            has_git = true;
+        } else if (std.mem.eql(u8, ".gitmodules", item.name)) {
+            has_git_submodule = true;
+        } else if (item.kind == .directory) {
+            var path_new = try path.clone(gpa);
             if (path_new.getLast() != '/') {
-                try path_new.append('/');
+                try path_new.append(gpa, '/');
             }
-            try path_new.appendSlice(item.name);
-            processDir(path_new) catch |e| std.debug.print("error: {any}\n", .{e});
+            try path_new.appendSlice(gpa, item.name);
+            try entries.append(gpa, try path_new.toOwnedSlice(gpa));
         }
     }
-}
-
-fn StatCheck(path: [*:0]const u8, expect: u32) bool {
-    var statbuf: std.posix.Stat = undefined;
-    const res = stat(path, &statbuf);
-    if (res != 0) {
-        return false;
+    if (has_git) {
+        print(path.items);
+        if (!has_git_submodule) {
+            return;
+        }
     }
-    const m = statbuf.mode & std.posix.S.IFMT;
-    return m == expect;
-}
-
-fn dirExists(path: [*:0]const u8) bool {
-    if (builtin.os.tag == .windows) {
-        const rc = GetFileAttributesA(path);
-        if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
-        return rc & windows.FILE_ATTRIBUTE_DIRECTORY != 0;
-    } else {
-        return StatCheck(path, std.posix.S.IFDIR);
-    }
-}
-
-fn fileExists(path: [*:0]const u8) bool {
-    if (builtin.os.tag == .windows) {
-        const rc = GetFileAttributesA(path);
-        if (rc == windows.INVALID_FILE_ATTRIBUTES) return false;
-        return rc & windows.FILE_ATTRIBUTE_DIRECTORY == 0;
-    } else {
-        return StatCheck(path, std.posix.S.IFREG);
+    for (entries.items) |i| {
+        var path_new: std.ArrayList(u8) = .empty;
+        try path_new.appendSlice(gpa, i);
+        processDir(&path_new) catch |e| std.debug.print("error: {any}\n", .{e});
     }
 }
 
 fn print(s: []const u8) void {
-    const stdout = std.io.getStdOut().writer();
-    _ = stdout.write(s) catch return;
-    _ = stdout.write("\n") catch return;
+    const buf: []u8 = gpa.alloc(u8, 1024) catch return;
+    defer gpa.free(buf);
+    var stdout = std.Io.File.stdout().writer(io, buf);
+    const writer = &stdout.interface;
+    _ = writer.writeAll(s) catch return;
+    _ = writer.writeAll("\n") catch return;
+    writer.flush() catch return;
 }
 
 const blacklist = [_][]const u8{
     "venv", "node_modules",
 };
-
-fn assertCstring(s: []const u8) [*:0]const u8 {
-    if (s[s.len - 1] != 0) unreachable;
-    return @ptrCast(s);
-}
