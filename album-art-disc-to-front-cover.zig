@@ -39,6 +39,7 @@ pub fn main(init: std.process.Init) !void {
 
 fn handleFile(path: []const u8) !void {
     const fp = try std.Io.Dir.cwd().openFile(io, path, .{ .mode = .read_write });
+    defer fp.close(io);
     var buf_f: [100]u8 = undefined;
     var buf: [100]u8 = undefined;
     var f_reader = fp.reader(io, &buf_f);
@@ -53,7 +54,7 @@ fn handleFile(path: []const u8) !void {
     // id (read above): 3; ver: 2; flag: 1; size: 4 byte(s)
     // so size begin from buf[6];
     // most significant bit of every byte is 0 and discarded.
-    const tagSize = @as(usize, buf[6]) * (2 << 21) + @as(usize, buf[7]) * (2 << 14)  + @as(usize, buf[8]) * (2 << 7) + @as(usize, buf[9]);
+    const tagSize = (@as(usize, buf[6]) << 21) | (@as(usize, buf[7]) << 14) | (@as(usize, buf[8]) << 7) | @as(usize, buf[9]);
 
     // skip extended header
     try reader.readSliceAll(buf[0..4]);

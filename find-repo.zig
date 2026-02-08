@@ -9,7 +9,9 @@ pub fn main(init: std.process.Init) !void {
     gpa = init.gpa;
     io = init.io;
 
-    var args = init.minimal.args.iterate();
+    // Windows requires allocator.
+    var args = try init.minimal.args.iterateAllocator(gpa);
+    defer args.deinit();
     _ = args.skip();
 
     while (args.next()) |path| {
