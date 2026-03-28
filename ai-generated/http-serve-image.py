@@ -40,8 +40,12 @@ index_template = """
         <ul>
             {% for name, path in images_in_current_directory %}
                 <li>
+		    {% if path.endswith('.html') %}
+                    <a href="{{ url_for('image', filename=path) }}">{{ name }}</a>
+		    {% else %}
                     <p>{{ name }}</p>
                     <img src="{{ url_for('image', filename=path) }}" alt="{{ name }}">
+		    {% endif %}
                 </li>
             {% endfor %}
         </ul>
@@ -74,7 +78,7 @@ def get_images_in_directory(directory):
     items = os.listdir(directory)
     items.sort(key=sort_num)
     for filename in items:
-        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.html')):
             images.append((directory, '/'.join([directory, filename])))
     return images
 
