@@ -36,7 +36,7 @@ pub fn main(init: std.process.Init) !void {
         try target.appendSlice(gpa, "gnu");
     }
 
-    var debug = environ.getAlloc(gpa, "DEBUG") catch "";
+    const debug = environ.getAlloc(gpa, "DEBUG") catch "";
     defer gpa.free(debug);
     if (debug.len > 0) {
         std.debug.print("compiling to: {s}\n", .{target.items});
