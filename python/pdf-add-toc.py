@@ -22,7 +22,7 @@ args = parser.parse_args()
 
 def parse_offset(line: str) -> int:
     # example: `# offset: 1 -> 12`
-    t1, t2 = re.findall(r'\d+', line)
+    t1, t2 = re.findall(r'-?\d+', line)
     return int(t2) - int(t1)
 
 def parse_toc(line: str) -> dict:
@@ -36,7 +36,7 @@ def parse_toc(line: str) -> dict:
     if leading_whitespace:
         level = int(leading_whitespace / g['indent'])
 
-    i = re.search(r' \d+$', line)
+    i = re.search(r' -?\d+$', line)
     title = line[leading_whitespace:i.start()]
     page_number = int(line[i.start():]) + g['offset']
     return {'title': title, 'page_number': page_number, 'level': level}
