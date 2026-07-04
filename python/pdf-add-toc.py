@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import re
 import argparse
 
@@ -14,16 +15,34 @@ toc_format = r'''
     number (with leading space) at end of line is page number;
     '''
 
+g = {
+    'indent': -1, # modify it on first indent
+    'offset': 0,
+    }
+
 parser = argparse.ArgumentParser(usage=toc_format)
 parser.add_argument('-i', required=True, help='pdf file (input)')
-parser.add_argument('-o', required=True, help='pdf file (output)')
-parser.add_argument('-c', required=True, help='toc')
+parser.add_argument('-o', help='pdf file (output)')
+parser.add_argument('-c', help='toc file')
+parser.add_argument('--dump-toc', action='store_true', help='output existing toc to stdout')
+parser.add_argument('--dump-toc-offset', default=0, type=int, help='specify page number offset for output toc')
 args = parser.parse_args()
+
+if not ((args.o and args.c) or args.dump_toc):
+    parser.print_help()
+    print('\n'
+          'expecting one of:'
+          '\n\t' '-o and -c'
+          '\n\t' '--dump-toc (and optional --dump-toc-offset)',
+          file=sys.stderr)
+    sys.exit(1)
+
 
 def parse_offset(line: str) -> int:
     # example: `# offset: 1 -> 12`
     t1, t2 = re.findall(r'-?\d+', line)
     return int(t2) - int(t1)
+
 
 def parse_toc(line: str) -> dict:
     leading_whitespace = 0
@@ -41,31 +60,36 @@ def parse_toc(line: str) -> dict:
     page_number = int(line[i.start():]) + g['offset']
     return {'title': title, 'page_number': page_number, 'level': level}
 
-toc = []
-g = {
-    'indent': -1, # modify it on first indent
-    'offset': 0,
-    }
-with open(args.c) as f:
-    for line in f.readlines():
-        line = line.rstrip()
-        if re.match(r'^#\s*offset:', line):
-            g['offset'] = parse_offset(line)
-        elif re.match(r'^(#|\s*$)', line):
-            continue
-        else:
-            toc.append(parse_toc(line))
 
-writer = pypdf.PdfWriter()
-writer.append(fileobj=args.i, import_outline=False)
+def write_toc(args):
+    toc = []
+    with open(args.c) as f:
+        for line in f.readlines():
+            line = line.rstrip()
+            if re.match(r'^#\s*offset:', line):
+                g['offset'] = parse_offset(line)
+            elif re.match(r'^(#|\s*$)', line):
+                continue
+            else:
+                toc.append(parse_toc(line))
 
-toc_level_stack = {0: None}
-for i in toc:
-    toc_level_stack[i['level'] + 1] = writer.add_outline_item(
-            title=i['title'],
-            page_number=i['page_number'] - 1, # zero-based
-            parent=toc_level_stack[i['level']],
-        )
 
-with open(args.o, 'wb') as f:
-    writer.write(f)
+    writer = pypdf.PdfWriter()
+    writer.append(fileobj=args.i, import_outline=False)
+
+    toc_level_stack = {0: None}
+    for i in toc:
+        toc_level_stack[i['level'] + 1] = writer.add_outline_item(
+                title=i['title'],
+                page_number=i['page_number'] - 1, # zero-based
+                parent=toc_level_stack[i['level']],
+            )
+
+    with open(args.o, 'wb') as f:
+        writer.write(f)
+
+
+if args.dump_toc:
+    print(args)
+else:
+    write_toc(args)
