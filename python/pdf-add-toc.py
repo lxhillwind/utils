@@ -25,7 +25,7 @@ parser.add_argument('-i', required=True, help='pdf file (input)')
 parser.add_argument('-o', help='pdf file (output)')
 parser.add_argument('-c', help='toc file')
 parser.add_argument('--dump-toc', action='store_true', help='output existing toc to stdout')
-parser.add_argument('--dump-toc-offset', default=0, type=int, help='specify page number offset for output toc')
+parser.add_argument('--dump-toc-offset', default=1, type=int, help='specify physical page number of logical page 1 (default: 1)')
 args = parser.parse_args()
 
 if not ((args.o and args.c) or args.dump_toc):
@@ -61,6 +61,30 @@ def parse_toc(line: str) -> dict:
     return {'title': title, 'page_number': page_number, 'level': level}
 
 
+def read_toc(args):
+    reader = pypdf.PdfReader(args.i)
+    toc = reader.outline
+    if not toc:
+        print('\n' 'WARNING: toc not found in this file.', file=sys.stderr)
+        sys.exit(0)
+
+    def parse_outline(toc, indent):
+        if isinstance(toc, list):
+            for i in toc:
+                parse_outline(i, indent + 1)
+        else:
+            print('%s%s %s' % (
+                ' ' * 4 * indent,
+                toc.title,
+                # get_page_number is 0-based, so +1;
+                reader.get_page_number(toc.page) + 1 - (args.dump_toc_offset - 1)
+                ))
+
+    if args.dump_toc_offset != 1:
+        print(f'# offset: 1 -> {args.dump_toc_offset}')
+    parse_outline(toc, -1)
+
+
 def write_toc(args):
     toc = []
     with open(args.c) as f:
@@ -90,6 +114,6 @@ def write_toc(args):
 
 
 if args.dump_toc:
-    print(args)
+    read_toc(args)
 else:
     write_toc(args)
